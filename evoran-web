@@ -1,0 +1,732 @@
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { ShoppingCart, Menu, X, Mail, Phone, Youtube, Facebook, Star, Shield, Truck, Plus, Minus, ArrowRight, CheckCircle, Clock } from 'lucide-react';
+
+// --- Firebase Imports (Mandatory Setup) ---
+import { initializeApp } from 'firebase/app';
+import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from 'firebase/auth';
+import { getFirestore, doc, setDoc, onSnapshot } from 'firebase/firestore';
+
+// --- UPDATED PRODUCT LIST ---
+const products = [
+    // T-SHIRTS (Price: 499 BDT) - New, attractive names
+    { id: 'p1', name: 'Urban Dusk', category: 'tshirt', price: 499, image: 'https://iili.io/KbdKdUG.jpg', featured: true, description: 'New EVORAN graphics. Made with premium fabric, themed around the city night.' },
+    { id: 'p2', name: 'Midnight Street', category: 'tshirt', price: 499, image: 'https://iili.io/KbdFmxI.jpg', featured: true, description: 'Reflecting the silence of the city night, best streetwear style.' },
+    { id: 'p3', name: 'Astral Wanderer', category: 'tshirt', price: 499, image: 'https://iili.io/KbdKCW7.jpg', featured: true, description: 'Astrology inspired design, for those who love the stars.' },
+    { id: 'p4', name: 'Infinite Bloom', category: 'tshirt', price: 499, image: 'https://iili.io/KbdK10g.jpg', featured: false, description: 'Graphics of flowers and nature, brightness on a white T-shirt.' },
+    { id: 'p5', name: 'Neon Wave', category: 'tshirt', price: 499, image: 'https://iili.io/KbdKWeR.jpg', featured: false, description: 'Modern T-shirt with neon color patterns. Design that seems to glow at night.' },
+    
+    // HOODIES (Price: 850 BDT) - New, attractive names
+    { id: 'h1', name: 'Cosmic Drift', category: 'hoodie', price: 850, image: 'https://iili.io/KbdK3Jf.jpg', featured: true, description: 'Space color theme. Comfortable and trendy comfort.' },
+    { id: 'h2', name: 'Shadow Line', category: 'hoodie', price: 850, image: 'https://iili.io/KbdFsUJ.jpg', featured: true, description: 'Minimal design, classic style, and best warmth.' },
+    { id: 'h3', name: 'Digital Echo', category: 'hoodie', price: 850, image: 'https://iili.io/KbdKns9.jpg', featured: false, description: 'Hoodie with digital glitch effect. For cyberpunk style lovers.' },
+    { id: 'h4', name: 'Horizon View', category: 'hoodie', price: 850, image: 'https://iili.io/KbdKA5x.jpg', featured: false, description: 'Dark hoodie with open horizon theme. Premium fabrics.' },
+    { id: 'h5', name: 'Monochrome Flux', category: 'hoodie', price: 850, image: 'https://iili.io/KbdKMdJ.jpg', featured: true, description: 'Great monotone design in black and white mix. Suitable for everyone.' },
+];
+
+// --- LOGO Component ---
+const Logo = ({ className = '', onClick = () => {}, isLarge = false }) => {
+    const DEEP_RED = '#990000'; 
+    const WHITE_COLOR = '#ffffff'; 
+    const GLOW_COLOR = '#00e0ff'; 
+    const SHADOW_COLOR = '#0077ff'; 
+
+    const fullGlowStyle = {
+        textShadow: 0 0 10px ${GLOW_COLOR}, 0 0 20px ${GLOW_COLOR}, 0 0 30px ${SHADOW_COLOR}, 0 0 40px ${SHADOW_COLOR},
+    };
+
+    const subtleGlowStyle = {
+        textShadow: 0 0 5px rgba(0, 224, 255, 0.3), 
+    };
+
+    const normalStyles = {
+        mainText: 'text-xl md:text-2xl',
+        subText: 'text-xs md:text-sm tracking-[0.3em] mt-0.5',
+    };
+    
+    const largeStyles = {
+        mainText: 'text-4xl sm:text-6xl md:text-8xl', 
+        subText: 'text-base md:text-xl tracking-[0.4em] mt-3',
+    };
+
+    const styles = isLarge ? largeStyles : normalStyles;
+    
+    const TextContent = ({ style = {} }) => (
+        <span 
+            className={${styles.mainText} font-extrabold tracking-widest uppercase leading-none transition-colors duration-300}
+            style={{ ...style, fontFamily: 'Inter, sans-serif' }}
+        >
+            <span style={{ color: WHITE_COLOR }}>EVO</span> 
+            <span style={{ color: DEEP_RED }}>RAN</span> 
+        </span>
+    );
+    
+    if (isLarge) {
+        return (
+            <div className={flex flex-col items-center cursor-pointer ${className} leading-none} onClick={onClick}>
+                <TextContent style={fullGlowStyle} />
+            </div>
+        );
+    }
+
+    return (
+        <div className={flex items-center cursor-pointer ${className} leading-none} onClick={onClick}>
+            <TextContent style={subtleGlowStyle} />
+        </div>
+    );
+};
+
+// --- CUSTOM ANIMATIONS COMPONENT (Injects global CSS for animations) ---
+const CustomAnimations = () => (
+    <style dangerouslySetInnerHTML={{__html: `
+        /* 1. Staggered Fade In Animation */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade-in-stagger {
+            animation: fadeIn 0.7s ease-out forwards;
+            opacity: 0; /* Initial state must be hidden */
+            will-change: opacity, transform;
+        }
+        
+        /* 2. Hero Background Subtle Zoom */
+        @keyframes subtleZoom {
+            0% { transform: scale(1); opacity: 0.9; }
+            50% { transform: scale(1.02); opacity: 0.95; }
+            100% { transform: scale(1); opacity: 0.9; }
+        }
+        .bg-subtle-zoom {
+            animation: subtleZoom 25s ease-in-out infinite alternate;
+        }
+
+        /* 3. Button/Interactive Focus Effects (using existing Tailwind classes but enhanced via custom class) */
+        .btn-glow-pulse {
+            transition: all 0.3s ease-in-out;
+            box-shadow: 0 0 0 rgba(239, 68, 68, 0.0);
+        }
+        .btn-glow-pulse:hover {
+            box-shadow: 0 0 15px rgba(239, 68, 68, 0.6); 
+        }
+    `}} />
+);
+
+
+const EvoranWebsite = () => {
+    const [currentPage, setCurrentPage] = useState('home');
+    const [menuOpen, setMenuOpen] = useState(false);
+    const [cart, setCart] = useState([]);
+    const [cartOpen, setCartOpen] = useState(false);
+    const [selectedCategory, setSelectedCategory] = useState('all');
+    const [notification, setNotification] = useState(null); 
+    const [loading, setLoading] = useState(false);
+    const [productModal, setProductModal] = useState(null);
+
+    // --- Firebase/Local State ---
+    const [db, setDb] = useState(null);
+    const [auth, setAuth] = useState(null);
+    const [userId, setUserId] = useState(null);
+    const [isAuthReady, setIsAuthReady] = useState(false);
+    const [useLocalStorage, setUseLocalStorage] = useState(false); 
+
+    const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+    const firebaseConfig = typeof _firebase_config !== 'undefined' ? JSON.parse(_firebase_config) : null;
+    const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+    // --- UTILITIES ---
+    const showNotification = useCallback((message, isSuccess = true) => {
+        setNotification({ message, isSuccess });
+        const timer = setTimeout(() => setNotification(null), 3000); 
+        return () => clearTimeout(timer); 
+    }, []);
+
+    const getImagePath = useCallback((imageName) => {
+        if (imageName && (imageName.startsWith('http') || imageName.startsWith('uploaded:'))) {
+            return imageName; 
+        }
+        // Fallback or placeholder handling for images
+        return imageName ? imageName : "https://placehold.co/400x500/333333/AAAAAA?text=No+Image"; 
+    }, []);
+
+
+    // --- FIREBASE/LOCALSTORAGE INIT & AUTH (UNCHANGED) ---
+    useEffect(() => {
+        if (firebaseConfig) {
+            try {
+                const app = initializeApp(firebaseConfig);
+                const firestore = getFirestore(app);
+                const authInstance = getAuth(app);
+                setDb(firestore);
+                setAuth(authInstance);
+
+                const unsubscribeAuth = onAuthStateChanged(authInstance, async (user) => {
+                    if (user) {
+                        setUserId(user.uid);
+                    } else {
+                        try {
+                            if (initialAuthToken) {
+                                await signInWithCustomToken(authInstance, initialAuthToken);
+                            } else {
+                                await signInAnonymously(authInstance);
+                            }
+                            setUserId(authInstance.currentUser?.uid || crypto.randomUUID());
+                        } catch (e) {
+                            console.error("Firebase Sign-In Failed, proceeding anonymously:", e);
+                            setUserId(crypto.randomUUID()); 
+                        }
+                    }
+                    setIsAuthReady(true);
+                });
+
+                return () => unsubscribeAuth();
+            } catch (error) {
+                console.error("Firebase Initialization Failed. Falling back to LocalStorage:", error);
+                setUseLocalStorage(true);
+                setIsAuthReady(true);
+                setUserId(crypto.randomUUID()); 
+            }
+        } else {
+            console.warn("Firebase config not found. Using LocalStorage for Cart persistence.");
+            setUseLocalStorage(true);
+            setIsAuthReady(true);
+            setUserId(crypto.randomUUID()); 
+        }
+    }, [firebaseConfig, initialAuthToken]);
+
+    // --- CART STORAGE HANDLERS (UNCHANGED) ---
+
+    const getCartDocRef = useCallback(() => {
+        if (!db || !userId) return null;
+        return doc(db, artifacts/${appId}/users/${userId}/evoran_cart/main_cart);
+    }, [db, userId, appId]);
+
+    const loadCartFromStorage = useCallback(() => {
+        if (useLocalStorage) {
+            try {
+                const storedCart = localStorage.getItem('evoran_cart_v1');
+                if (storedCart) {
+                    setCart(JSON.parse(storedCart));
+                }
+            } catch (e) {
+                console.error("Error loading cart from localStorage:", e);
+            }
+        }
+    }, [useLocalStorage]);
+
+    const updateCartInStorage = useCallback((newCart) => {
+        if (useLocalStorage) {
+            try {
+                localStorage.setItem('evoran_cart_v1', JSON.stringify(newCart));
+                setCart(newCart);
+            } catch (e) {
+                console.error("Error saving cart to localStorage:", e);
+            }
+        } else {
+            const cartDocRef = getCartDocRef();
+            if (cartDocRef && isAuthReady) {
+                setDoc(cartDocRef, { items: newCart })
+                    .catch((error) => {
+                        console.error("Error updating cart in Firestore:", error);
+                        showNotification('Failed to update cart in Firestore.', false);
+                    });
+            }
+            setCart(newCart); 
+        }
+    }, [useLocalStorage, getCartDocRef, isAuthReady, showNotification]);
+
+    // --- FIRESTORE/LOCALSTORAGE CART LISTENER/LOADER (UNCHANGED) ---
+    useEffect(() => {
+        if (!isAuthReady) return;
+
+        if (useLocalStorage) {
+            loadCartFromStorage();
+            return;
+        }
+
+        const cartDocRef = getCartDocRef();
+        if (!cartDocRef) return;
+
+        const unsubscribe = onSnapshot(cartDocRef, (docSnapshot) => {
+            if (docSnapshot.exists()) {
+                const data = docSnapshot.data();
+                setCart(data.items || []);
+            } else {
+                setCart([]);
+                setDoc(cartDocRef, { items: [] }, { merge: true }).catch(console.error);
+            }
+        }, (error) => {
+            console.error("Error fetching cart data from Firestore:", error);
+            showNotification('Failed to load cart data from Firestore. Using Local State.', false);
+        });
+
+        return () => unsubscribe();
+    }, [isAuthReady, useLocalStorage, getCartDocRef, loadCartFromStorage, showNotification]);
+
+
+    // --- CART LOGIC & CALCULATIONS (UNCHANGED) ---
+    const addToCart = useCallback((product, quantity = 1) => {
+        const newCart = cart.slice();
+        const existingIndex = newCart.findIndex(item => item.id === product.id);
+
+        if (existingIndex > -1) {
+            newCart[existingIndex].quantity += quantity;
+        } else {
+            newCart.push({ ...product, quantity });
+        }
+        updateCartInStorage(newCart);
+        showNotification(${product.name} added!);
+        setProductModal(null);
+    }, [cart, updateCartInStorage, showNotification]);
+
+    const updateQuantity = useCallback((id, delta) => {
+        const newCart = cart.map(item =>
+            item.id === id ? { ...item, quantity: item.quantity + delta } : item
+        ).filter(item => item.quantity > 0);
+        updateCartInStorage(newCart);
+    }, [cart, updateCartInStorage]);
+
+    const removeFromCart = useCallback((id) => {
+        const newCart = cart.filter(item => item.id !== id);
+        updateCartInStorage(newCart);
+        showNotification('Item removed');
+    }, [cart, updateCartInStorage, showNotification]);
+
+    const clearCart = useCallback(() => {
+        updateCartInStorage([]);
+        showNotification('Cart cleared');
+    }, [updateCartInStorage, showNotification]);
+
+    const totalPrice = useMemo(() => cart.reduce((sum, item) => sum + (item.price * item.quantity), 0), [cart]);
+    const totalItems = useMemo(() => cart.reduce((sum, item) => sum + item.quantity, 0), [cart]);
+
+    const filteredProducts = useMemo(() => 
+        selectedCategory === 'all'
+        ? products
+        : products.filter(p => p.category === selectedCategory)
+    , [selectedCategory]);
+
+    useEffect(() => {
+        setCartOpen(false);
+        setMenuOpen(false);
+    }, [currentPage]);
+
+    const sendToWhatsApp = useCallback(() => {
+        if (cart.length === 0) return;
+
+        setLoading(true);
+        const message = cart.map(item =>
+            *${item.name}* x ${item.quantity} = ৳${item.price * item.quantity}
+        ).join('\n');
+
+        const total = Total: ৳${totalPrice}\n\nThank you for ordering from EVORAN!;
+        const whatsappUrl = https://wa.me/8801604954097?text=EVORAN New Order:\n${message}\n\n${total};
+
+        window.open(whatsappUrl, '_blank');
+        setTimeout(() => {
+             setLoading(false);
+             showNotification('Order sent to WhatsApp!', true);
+        }, 1000);
+    }, [cart, totalPrice, showNotification]);
+    
+    // --- SUB-COMPONENTS: ProductDetailModal (Enhanced Transition) ---
+    const ProductDetailModal = ({ product, onClose }) => {
+        const [quantity, setQuantity] = useState(1);
+        const imageUrl = getImagePath(product.image);
+
+        useEffect(() => {
+            const handleEsc = (event) => {
+                if (event.key === 'Escape') {
+                    onClose();
+                }
+            };
+            window.addEventListener('keydown', handleEsc);
+            return () => window.removeEventListener('keydown', handleEsc);
+        }, [onClose]);
+
+
+        const handleAddToCart = () => {
+            addToCart(product, quantity);
+            onClose();
+        };
+
+        return (
+            // Added faster transition to modal overlay and content
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 transition-opacity duration-500" onClick={onClose}>
+                <div className="bg-gray-800 text-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto transform transition-all duration-500 ease-in-out scale-100 opacity-100" onClick={e => e.stopPropagation()}>
+                    <div className="p-6 md:p-8">
+                        <div className="flex justify-end mb-4">
+                            <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors duration-200 p-1"><X className="w-6 h-6" /></button>
+                        </div>
+                        <div className="md:grid md:grid-cols-2 gap-8">
+                            <div className="aspect-[3/4] bg-gray-700 rounded-lg overflow-hidden mb-6 md:mb-0">
+                                <img 
+                                    src={imageUrl} 
+                                    alt={product.name} 
+                                    className="w-full h-full object-cover transition-transform duration-500 hover:scale-110" 
+                                    onError={(e) => { e.target.onerror = null; e.target.src = "https://placehold.co/400x500/333333/AAAAAA?text=Image+Error"; }}
+                                />
+                            </div>
+                            <div>
+                                <h2 className="text-3xl font-extrabold mb-2 animate-fade-in-stagger" style={{animationDelay: '0.1s'}}>{product.name}</h2>
+                                <p className="text-2xl font-bold text-red-500 mb-6 transition-colors animate-fade-in-stagger" style={{animationDelay: '0.2s'}}>৳{product.price}</p>
+                                
+                                <p className="text-gray-300 mb-6 leading-relaxed animate-fade-in-stagger" style={{animationDelay: '0.3s'}}>{product.description}</p>
+                                
+                                <div className="mb-8 flex items-center gap-4 animate-fade-in-stagger" style={{animationDelay: '0.4s'}}>
+                                    <span className="font-semibold text-lg">Quantity:</span>
+                                    <div className="flex items-center gap-4 border border-gray-600 rounded-full p-1 transition-shadow duration-300 hover:shadow-lg hover:shadow-red-900/50">
+                                        <button onClick={() => setQuantity(q => Math.max(1, q - 1))} className="w-8 h-8 flex items-center justify-center rounded-full text-gray-300 hover:bg-gray-700 transition-colors duration-200"><Minus className="w-4 h-4" /></button>
+                                        <span className="w-8 text-center font-bold text-white">{quantity}</span>
+                                        <button onClick={() => setQuantity(q => q + 1)} className="w-8 h-8 flex items-center justify-center rounded-full text-gray-300 hover:bg-gray-700 transition-colors duration-200"><Plus className="w-4 h-4" /></button>
+                                    </div>
+                                </div>
+                                
+                                <button onClick={handleAddToCart} className="w-full bg-red-600 text-white py-4 text-lg font-bold hover:bg-red-700 transition-colors duration-300 rounded-lg flex items-center justify-center gap-2 transform hover:scale-[1.01] shadow-md btn-glow-pulse animate-fade-in-stagger" style={{animationDelay: '0.5s'}}>
+                                    <ShoppingCart className="w-5 h-5" /> ADD TO CART (৳{product.price * quantity})
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
+
+    // --- PAGE COMPONENTS ---
+    const HomePage = () => (
+        <div className="min-h-screen bg-gray-900">
+            {/* Hero Banner: min-h-screen for full height responsive view */}
+            <div className="relative min-h-screen flex items-center justify-center bg-black text-white overflow-hidden p-4 md:p-8 pt-20">
+                {/* Background element for animation - now with subtle zoom */}
+                <div className="absolute inset-0 bg-gradient-to-br from-black via-gray-900 to-black opacity-90 bg-subtle-zoom"></div>
+                <div className="relative z-10 text-center px-4 py-16">
+                    {/* 1. EVORAN Logo - Staggered entrance 0.1s */}
+                    <div className="animate-fade-in-stagger" style={{ animationDelay: '0.1s' }}>
+                        <Logo isLarge={true} onClick={() => setCurrentPage('home')} className="justify-center" /> 
+                    </div>
+                    
+                    {/* 2. FASHION HOUSE Tagline - Staggered entrance 0.3s */}
+                    <span className="text-lg md:text-3xl tracking-[0.4em] mt-8 mb-8 text-gray-400 font-medium uppercase text-center block animate-fade-in-stagger" style={{ animationDelay: '0.3s' }}>
+                        FASHION HOUSE
+                    </span>
+                    
+                    {/* 3. Define Your Style - Staggered entrance 0.5s */}
+                    <p className="text-xl md:text-3xl tracking-widest mb-10 text-gray-400 font-light mt-0 animate-fade-in-stagger" style={{ animationDelay: '0.5s' }}>DEFINE YOUR STYLE</p>
+                    
+                    {/* Button - Staggered entrance 0.7s */}
+                    <button onClick={() => setCurrentPage('shop')} className="bg-white text-black px-10 py-4 text-lg font-bold rounded-full shadow-lg hover:bg-gray-200 transition-all duration-300 uppercase tracking-wider transform hover:scale-105 active:scale-95 btn-glow-pulse animate-fade-in-stagger" style={{ animationDelay: '0.7s' }}>
+                        SHOP COLLECTION
+                    </button>
+                </div>
+            </div>
+
+            {/* Featured Products */}
+            <div className="bg-gray-900 text-white py-20 px-4">
+                <div className="max-w-7xl mx-auto">
+                    <h2 className="text-4xl font-bold text-center mb-4 border-b-2 border-red-600 inline-block px-4 pb-2 transition-colors animate-fade-in-stagger" style={{ animationDelay: '0.9s' }}>FEATURED PRODUCTS</h2>
+                    <p className="text-center text-gray-400 mb-12 animate-fade-in-stagger" style={{ animationDelay: '1.1s' }}>Check out our best designs</p>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                        {products.filter(p => p.featured).map((product, index) => (
+                            <div key={product.id} 
+                                className="group cursor-pointer p-2 rounded-xl bg-gray-800 shadow-xl hover:shadow-2xl hover:shadow-red-900/50 transition-all duration-300 transform hover:-translate-y-1 animate-fade-in-stagger" 
+                                style={{ animationDelay: ${1.2 + 0.1 * index}s }} // Staggered delay starts after general text
+                                onClick={() => setProductModal(product)}>
+                                <div className="relative overflow-hidden bg-gray-700 aspect-[3/4] rounded-lg">
+                                    <img 
+                                        src={getImagePath(product.image)} 
+                                        alt={product.name} 
+                                        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" 
+                                        onError={(e) => { e.target.onerror = null; e.target.src = "https://placehold.co/400x500/333333/AAAAAA?text=Image+Error"; }}
+                                    />
+                                    <div className="absolute inset-0 bg-black opacity-0 group-hover:opacity-30 transition-opacity duration-300"></div>
+                                </div>
+                                <div className="p-2">
+                                    <h3 className="mt-1 font-semibold text-lg truncate text-white">{product.name}</h3>
+                                    <p className="text-xl font-bold text-red-500">৳{product.price}</p>
+                                    <div className="flex justify-start">
+                                        <button className="text-sm text-gray-400 font-medium hover:text-red-500 flex items-center gap-1 mt-1 transition-colors">
+                                            VIEW DETAILS <ArrowRight className="w-4 h-4 ml-1 transition-transform group-hover:translate-x-1" />
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            </div>
+
+            {/* Features Section */}
+            <div className="bg-black text-white py-16 px-4">
+                <div className="max-w-7xl mx-auto grid md:grid-cols-3 gap-12 text-center">
+                    {/* Feature 1 */}
+                    <div className="p-4 rounded-lg transition-transform duration-300 hover:scale-[1.05] hover:shadow-red-900/40 hover:shadow-2xl animate-fade-in-stagger" style={{ animationDelay: '0.1s' }}>
+                        <Clock className="w-12 h-12 mx-auto mb-4 text-red-500 transition-colors" />
+                        <h3 className="font-bold text-xl mb-1">FAST DELIVERY</h3>
+                        <p className="text-gray-400">Quick delivery within 3-7 business days</p>
+                    </div>
+                    {/* Feature 2 */}
+                    <div className="p-4 rounded-lg transition-transform duration-300 hover:scale-[1.05] hover:shadow-red-900/40 hover:shadow-2xl animate-fade-in-stagger" style={{ animationDelay: '0.3s' }}>
+                        <Shield className="w-12 h-12 mx-auto mb-4 text-red-500 transition-colors" />
+                        <h3 className="font-bold text-xl mb-1">100% AUTHENTIC</h3>
+                        <p className="text-gray-400">Guarantee of premium quality</p>
+                    </div>
+                    {/* Feature 3 */}
+                    <div className="p-4 rounded-lg transition-transform duration-300 hover:scale-[1.05] hover:shadow-red-900/40 hover:shadow-2xl animate-fade-in-stagger" style={{ animationDelay: '0.5s' }}>
+                        <Star className="w-12 h-12 mx-auto mb-4 text-red-500 transition-colors" />
+                        <h3 className="font-bold text-xl mb-1">24/7 SUPPORT</h3>
+                        <p className="text-gray-400">Contact us for any issue</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+
+    const ShopPage = () => (
+        <div className="min-h-screen bg-gray-900 text-white py-28 px-4">
+            <div className="max-w-7xl mx-auto">
+                <h1 className="text-5xl font-bold text-center mb-4 animate-fade-in-stagger" style={{animationDelay: '0.1s'}}>SHOP COLLECTION</h1>
+                <p className="text-center text-gray-400 mb-12 animate-fade-in-stagger" style={{animationDelay: '0.2s'}}>Choose your favorite outfit</p>
+
+                <div className="flex justify-center gap-3 md:gap-4 mb-12 flex-wrap animate-fade-in-stagger" style={{animationDelay: '0.3s'}}>
+                    {['all', 'tshirt', 'hoodie'].map(cat => (
+                        <button key={cat} onClick={() => setSelectedCategory(cat)}
+                            // UPDATED TEXT HERE: Removed price and plural form
+                            className={px-4 py-2 md:px-6 md:py-3 border-2 font-bold transition-all duration-300 rounded-full text-xs md:text-sm uppercase transform hover:scale-105 btn-glow-pulse ${selectedCategory === cat ? 'bg-red-600 text-white border-red-600 shadow-lg' : 'border-gray-700 text-gray-400 hover:border-red-600 hover:text-white hover:bg-gray-800'}}>
+                            {cat === 'all' ? 'ALL PRODUCTS' : cat === 'tshirt' ? 'T-shirt' : 'Hoodie'}
+                        </button>
+                    ))}
+                </div>
+
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+                    {filteredProducts.map((product, index) => (
+                        <div key={product.id} 
+                            className="group bg-gray-800 rounded-xl shadow-lg hover:shadow-2xl hover:shadow-red-900/50 transition-all duration-300 overflow-hidden transform hover:-translate-y-1 animate-fade-in-stagger"
+                            style={{ animationDelay: ${0.4 + 0.1 * index}s }}
+                        >
+                            <div className="relative bg-gray-700 aspect-[3/4] overflow-hidden">
+                                <img 
+                                    src={getImagePath(product.image)} 
+                                    alt={product.name} 
+                                    className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" 
+                                    onError={(e) => { e.target.onerror = null; e.target.src = "https://placehold.co/400x500/333333/AAAAAA?text=Image+Error"; }}
+                                />
+                                <button onClick={() => setProductModal(product)}
+                                    className="absolute bottom-0 left-0 w-full bg-red-600 text-white py-3 font-bold opacity-0 group-hover:opacity-100 transition-all duration-300 translate-y-full group-hover:translate-y-0 text-sm md:text-base hover:bg-red-700 active:bg-red-800">
+                                    VIEW DETAILS / ADD TO CART
+                                </button>
+                            </div>
+                            <div className="p-4">
+                                <h3 className="font-semibold text-lg truncate text-white">{product.name}</h3>
+                                <p className="text-xl font-bold text-red-500">৳{product.price}</p>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </div>
+        </div>
+    );
+
+    const ContactPage = () => (
+        <div className="min-h-screen bg-gray-900 text-white py-28 px-4">
+            <div className="max-w-6xl mx-auto">
+                <h1 className="text-5xl font-bold text-center mb-4 animate-fade-in-stagger" style={{animationDelay: '0.1s'}}>CONTACT US</h1>
+                <p className="text-center text-gray-400 mb-16 animate-fade-in-stagger" style={{animationDelay: '0.2s'}}>Reach out to us if you have any questions</p>
+                
+                <div className="grid md:grid-cols-2 gap-12 bg-gray-800 p-8 md:p-12 rounded-xl shadow-2xl animate-fade-in-stagger" style={{animationDelay: '0.3s'}}>
+                    <div>
+                        <h2 className="text-3xl font-bold mb-8 text-white">CONTACT INFORMATION</h2>
+                        <div className="space-y-6 text-lg">
+                            {/* Animated contact info blocks */}
+                            <div className="flex items-start gap-4 p-4 bg-gray-700 rounded-lg shadow-md hover:bg-gray-700/80 transition-all duration-300 transform hover:scale-[1.01] animate-fade-in-stagger" style={{animationDelay: '0.4s'}}>
+                                <Mail className="w-6 h-6 text-red-500 flex-shrink-0 mt-1" />
+                                <div><strong>Email:</strong><br /><a href="mailto:evoran952@gmail.com" className="text-blue-400 hover:text-blue-300 hover:underline transition-colors">evoran952@gmail.com</a></div>
+                            </div>
+                            <div className="flex items-start gap-4 p-4 bg-gray-700 rounded-lg shadow-md hover:bg-gray-700/80 transition-all duration-300 transform hover:scale-[1.01] animate-fade-in-stagger" style={{animationDelay: '0.5s'}}>
+                                <Phone className="w-6 h-6 text-green-500 flex-shrink-0 mt-1" />
+                                <div><strong>Phone/WhatsApp:</strong><br /><a href="https://wa.me/8801604954097" className="text-green-500 hover:text-green-400 hover:underline transition-colors">+880 1604-954097</a></div>
+                            </div>
+                        </div>
+                        <div className="mt-10 animate-fade-in-stagger" style={{animationDelay: '0.6s'}}>
+                            <h3 className="font-bold mb-4 text-white">FOLLOW US</h3>
+                            <div className="flex gap-4">
+                                <a href="https://www.youtube.com/@Evoran-r2c" target="_blank" rel="noopener noreferrer" className="w-12 h-12 bg-red-600 text-white flex items-center justify-center rounded-full hover:bg-red-700 transition-colors duration-300 transform hover:scale-110 shadow-lg"><Youtube className="w-6 h-6" /></a>
+                                <a href="https://www.facebook.com/profile.php?id=61581798921211" target="_blank" rel="noopener noreferrer" className="w-12 h-12 bg-red-600 text-white flex items-center justify-center rounded-full hover:bg-red-700 transition-colors duration-300 transform hover:scale-110 shadow-lg"><Facebook className="w-6 h-6" /></a>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Form side with staggered fields */}
+                    <div className="animate-fade-in-stagger" style={{animationDelay: '0.7s'}}>
+                        <form action="https://formsubmit.co/evoran952@gmail.com" method="POST" className="space-y-6">
+                            <input type="text" name="name" placeholder="Your Name" required className="w-full px-6 py-4 border-2 border-gray-700 focus:border-red-500 rounded-lg outline-none transition-all bg-gray-700 text-white placeholder-gray-400 hover:border-gray-600 animate-fade-in-stagger" style={{animationDelay: '0.8s'}} />
+                            <input type="email" name="email" placeholder="Your Email" required className="w-full px-6 py-4 border-2 border-gray-700 focus:border-red-500 rounded-lg outline-none transition-all bg-gray-700 text-white placeholder-gray-400 hover:border-gray-600 animate-fade-in-stagger" style={{animationDelay: '0.9s'}} />
+                            <textarea name="message" rows="6" placeholder="Your Message" required className="w-full px-6 py-4 border-2 border-gray-700 focus:border-red-500 rounded-lg outline-none transition-all resize-none bg-gray-700 text-white placeholder-gray-400 hover:border-gray-600 animate-fade-in-stagger" style={{animationDelay: '1.0s'}}></textarea>
+                            <button type="submit" className="w-full bg-red-600 text-white py-5 font-bold hover:bg-red-700 transition-colors duration-300 uppercase tracking-wider rounded-lg shadow-md transform hover:scale-[1.005] active:scale-100 btn-glow-pulse animate-fade-in-stagger" style={{animationDelay: '1.1s'}}>
+                                SEND MESSAGE
+                            </button>
+                            <input type="hidden" name="_next" value="https://yoursite.com/thanks" />
+                            <input type="hidden" name="_captcha" value="false" />
+                        </form>
+                    </div>
+                </div>
+
+                {/* User ID (Mandatory for collaborative apps) */}
+                {isAuthReady && (
+                    <div className="mt-16 text-center text-sm text-gray-500 p-4 border-t border-gray-700 animate-fade-in-stagger" style={{animationDelay: '1.2s'}}>
+                        {useLocalStorage ? 'Storage Mode: LocalStorage' : 'Storage Mode: Firestore'} | User ID: <span className="font-mono text-white select-all">{userId || 'Loading...'}</span>
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+
+    // --- MAIN RENDER ---
+    return (
+        <div style={{ fontFamily: 'Inter, sans-serif' }} className="bg-gray-900 min-h-screen">
+            {/* Inject Custom CSS Animations */}
+            <CustomAnimations /> 
+
+            {/* Notification (Unchanged) */}
+            {notification && (
+                <div className={fixed top-20 left-1/2 -translate-x-1/2 text-white px-8 py-4 rounded-full z-50 shadow-2xl transition-all duration-300 transform ${notification.isSuccess ? 'bg-green-600' : 'bg-red-600'} animate-fade-in-down}>
+                    {notification.isSuccess ? <CheckCircle className="inline w-5 h-5 mr-2" /> : <X className="inline w-5 h-5 mr-2" />}
+                    {notification.message}
+                </div>
+            )}
+
+            {/* Nav (Subtle animations added) */}
+            <nav className="fixed top-0 w-full bg-gray-900/95 backdrop-blur-sm shadow-lg z-40 border-b border-gray-700 animate-fade-in-stagger" style={{animationDelay: '0.0s'}}>
+                <div className="max-w-7xl mx-auto px-4 py-5 flex justify-between items-center">
+                    <Logo isLarge={false} onClick={() => setCurrentPage('home')} className="flex-row items-baseline" />
+                    <div className="hidden md:flex gap-10 items-center">
+                        {['home', 'shop', 'contact'].map(p => (
+                            <button key={p} onClick={() => setCurrentPage(p)} className={font-bold uppercase tracking-wider pb-1 border-b-2 transition-all duration-200 transform hover:scale-105 ${currentPage === p ? 'text-red-500 border-red-500' : 'text-gray-300 border-transparent hover:text-white hover:border-white'}}>
+                                {p === 'home' ? 'HOME' : p === 'shop' ? 'SHOP' : 'CONTACT'}
+                            </button>
+                        ))}
+                        <button onClick={() => setCartOpen(true)} className="relative p-2 rounded-full hover:bg-gray-800 transition-colors duration-200 transform hover:scale-110 active:scale-95 btn-glow-pulse">
+                            <ShoppingCart className="w-6 h-6 text-white" />
+                            {totalItems > 0 && <span className="absolute -top-1 -right-1 bg-red-600 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold animate-pulse">{totalItems}</span>}
+                        </button>
+                    </div>
+                    <div className="md:hidden flex items-center gap-4 text-white">
+                        <button onClick={() => setCartOpen(true)} className="relative transform hover:scale-110 active:scale-95 transition-transform duration-200">
+                            <ShoppingCart className="w-6 h-6" />
+                            {totalItems > 0 && <span className="absolute -top-1 -right-1 bg-red-600 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold animate-pulse">{totalItems}</span>}
+                        </button>
+                        <button onClick={() => setMenuOpen(!menuOpen)} className="p-1 rounded hover:bg-gray-800 transition-colors duration-200 transform hover:scale-110">
+                            {menuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+                        </button>
+                    </div>
+                </div>
+
+                {/* Mobile Menu (Transitioned) */}
+                {menuOpen && (
+                    <div className="md:hidden bg-gray-900 border-t border-gray-700 transition-all duration-300 ease-in-out">
+                        {['home', 'shop', 'contact'].map(p => (
+                            <button key={p} onClick={() => { setCurrentPage(p); setMenuOpen(false); }} className="block w-full text-left py-3 px-6 font-bold uppercase border-b border-gray-700 text-gray-200 hover:bg-gray-800 transition-colors">
+                                {p}
+                            </button>
+                        ))}
+                    </div>
+                )}
+            </nav>
+
+            {/* Product Detail Modal (Managed by its component for smooth open/close) */}
+            {productModal && <ProductDetailModal product={productModal} onClose={() => setProductModal(null)} />}
+
+
+            {/* Cart Sidebar (Transitioned) */}
+            {cartOpen && (
+                <div className="fixed inset-0 z-50 flex justify-end bg-black/50 transition-opacity duration-300" onClick={() => setCartOpen(false)}>
+                    <div className="bg-gray-900 text-white w-full max-w-sm sm:max-w-md h-full overflow-y-auto shadow-2xl transform transition-transform duration-300 ease-in-out translate-x-0" onClick={e => e.stopPropagation()}>
+                        {/* ... Cart Content (Inner animations can be added but kept simple for performance) */}
+                        <div className="sticky top-0 bg-gray-900 p-6 border-b border-gray-700 z-10">
+                            <div className="flex justify-between items-center">
+                                <h2 className="text-2xl font-bold">YOUR CART ({totalItems})</h2>
+                                <button onClick={() => setCartOpen(false)} className="p-2 rounded-full hover:bg-gray-800 text-white transition-colors"><X className="w-6 h-6" /></button>
+                            </div>
+                        </div>
+                        
+                        <div className="p-6 pb-28">
+                            {cart.length === 0 ? (
+                                <div className="text-center py-20">
+                                    <ShoppingCart className="w-20 h-20 mx-auto text-gray-700 mb-4" />
+                                    <p className="text-xl text-gray-400 mb-6">Your cart is empty</p>
+                                    <button onClick={() => { setCurrentPage('shop'); setCartOpen(false); }} className="mt-6 bg-red-600 text-white px-8 py-4 font-bold rounded-lg shadow-md hover:bg-red-700 transition-colors transform hover:scale-105 btn-glow-pulse">
+                                        START SHOPPING
+                                    </button>
+                                </div>
+                            ) : (
+                                <>
+                                    <div className="space-y-6">
+                                        {cart.map(item => (
+                                            <div key={item.id} className="flex gap-4 items-center p-3 border-b border-gray-700 hover:bg-gray-800 rounded-lg transition-colors transform hover:scale-[1.01]">
+                                                <img 
+                                                    src={getImagePath(item.image)} 
+                                                    alt={item.name} 
+                                                    className="w-20 h-24 object-cover rounded-lg flex-shrink-0" 
+                                                    onError={(e) => { e.target.onerror = null; e.target.src = "https://placehold.co/400x500/333333/AAAAAA?text=Image+Error"; }}
+                                                />
+                                                <div className="flex-1 min-w-0">
+                                                    <h3 className="font-bold text-lg text-white truncate">{item.name}</h3>
+                                                    <p className="text-gray-400 text-sm">৳{item.price} per unit</p>
+                                                    
+                                                    <div className="flex items-center justify-between gap-3 mt-2">
+                                                        <div className="flex items-center gap-1 border border-gray-700 rounded-full transition-shadow hover:shadow-red-900/30">
+                                                            <button onClick={() => updateQuantity(item.id, -1)} className="w-7 h-7 flex items-center justify-center rounded-full text-gray-300 hover:bg-gray-700 transition-colors"><Minus className="w-4 h-4" /></button>
+                                                            <span className="w-6 text-center font-bold text-white">{item.quantity}</span>
+                                                            <button onClick={() => updateQuantity(item.id, 1)} className="w-7 h-7 flex items-center justify-center rounded-full text-gray-300 hover:bg-gray-700 transition-colors"><Plus className="w-4 h-4" /></button>
+                                                        </div>
+                                                        <p className="text-xl font-bold text-red-500 flex-shrink-0">৳{item.price * item.quantity}</p>
+                                                    </div>
+                                                </div>
+                                                <button onClick={() => removeFromCart(item.id)} className="text-red-500 hover:text-red-300 p-2 rounded-full hover:bg-gray-800 transition-colors flex-shrink-0"><X /></button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </>
+                            )}
+                        </div>
+                        
+                        {/* Fixed Footer for Checkout */}
+                        {cart.length > 0 && (
+                            <div className="fixed bottom-0 w-full max-w-sm sm:max-w-md bg-gray-800 p-6 border-t border-gray-700 shadow-t-2xl">
+                                <div className="flex justify-between text-2xl font-bold mb-4">
+                                    <span>Total Price:</span>
+                                    <span className="text-red-500">৳{totalPrice}</span>
+                                </div>
+                                <button onClick={sendToWhatsApp} disabled={loading || !isAuthReady} className={w-full text-white py-5 font-bold transition-all duration-300 rounded-lg flex items-center justify-center gap-3 shadow-lg transform hover:scale-[1.01] active:scale-100 btn-glow-pulse ${loading || !isAuthReady ? 'bg-gray-600 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700'}}>
+                                    {loading ? 'Sending Order...' : 'ORDER ON WHATSAPP'}
+                                </button>
+                                <button onClick={clearCart} className="w-full mt-3 border-2 border-red-600 text-red-600 py-4 font-bold hover:bg-red-900/50 transition-colors rounded-lg">
+                                    CLEAR CART
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
+
+            <main className="min-h-screen">
+                {currentPage === 'home' && <HomePage />}
+                {currentPage === 'shop' && <ShopPage />}
+                {currentPage === 'contact' && <ContactPage />}
+            </main>
+
+            <footer className="bg-black text-white py-16 px-4 border-t border-gray-900 animate-fade-in-stagger" style={{animationDelay: '0.1s'}}>
+                <div className="max-w-7xl mx-auto text-center">
+                    <Logo isLarge={false} onClick={() => setCurrentPage('home')} className="justify-center mb-4" />
+                    <div className="flex justify-center gap-6 mb-8">
+                        <a href="https://www.youtube.com/@Evoran-r2c" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-red-500 transition-colors duration-300 transform hover:scale-125"><Youtube className="w-6 h-6" /></a>
+                        <a href="https://www.facebook.com/profile.php?id=61581798921211" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-red-500 transition-colors duration-300 transform hover:scale-125"><Facebook className="w-6 h-6" /></a>
+                    </div>
+                    <p className="text-gray-400 mb-2">Premium Streetwear | Made for the bold</p>
+                    <p className="text-sm text-gray-500">© 2025 EVORAN. All rights reserved.</p>
+                </div>
+            </footer>
+        </div>
+    );
+};
+
+export default EvoranWebsite;
